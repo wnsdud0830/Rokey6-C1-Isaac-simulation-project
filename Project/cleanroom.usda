@@ -17,8 +17,13 @@
                 double radius = 32.87893371582031
             }
             dictionary Perspective = {
+<<<<<<< HEAD
                 double3 position = (-23.339384969851064, 18.26630866993459, 27.401741377858905)
                 double3 target = (2.940640163888208, 2.572855110417118, -2.200838228799107)
+=======
+                double3 position = (-20.646816265911234, 6.846531851631552, 9.835821706227438)
+                double3 target = (13.295469023094917, 11.075248277387121, -2.232409968003685)
+>>>>>>> 90ba6b6 (Fix : with laser)
             }
             dictionary Right = {
                 double3 position = (0, -1690509.4609375, -3.7536850537589483e-10)
@@ -8122,7 +8127,11 @@ def Xform "Root" (
             int numRays = 5
             double3 xformOp:rotateXYZ = (0, 0, 0)
             float3 xformOp:scale = (1, 1, 1)
+<<<<<<< HEAD
             double3 xformOp:translate = (-7.7, 7.5, 0.1)
+=======
+            double3 xformOp:translate = (-7.7, 7.797132859247679, 0.1)
+>>>>>>> 90ba6b6 (Fix : with laser)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
         }
 

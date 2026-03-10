@@ -17,8 +17,8 @@
                 double radius = 32.87893371582031
             }
             dictionary Perspective = {
-                double3 position = (-4.652444951838882, -1.542016464387313, 8.61395507441354)
-                double3 target = (-4.356535957399267, 14.209315690615941, -1.063958269359226)
+                double3 position = (-20.646816265911234, 6.846531851631552, 9.835821706227438)
+                double3 target = (13.295469023094917, 11.075248277387121, -2.232409968003685)
             }
             dictionary Right = {
                 double3 position = (0, -1690509.4609375, -3.7536850537589483e-10)
@@ -45,12 +45,13 @@
             bool excludeRigidBodies = 1
         }
         dictionary omni_layer = {
-            string authoring_layer = "./cleanromm.usd"
+            string authoring_layer = "./cleanroom.usda"
             dictionary locked = {
             }
             dictionary muteness = {
             }
         }
+        int refinementOverrideImplVersion = 0
         dictionary renderSettings = {
             int "rtx:externalFrameCounter" = 76275
             double "rtx:sceneDb:ambientLightIntensity" = 0.9999999776482582
@@ -7442,7 +7443,7 @@ def Xform "Root" (
         {
             float drive:linear:physics:damping = 100
             float drive:linear:physics:stiffness = 100
-            float drive:linear:physics:targetPosition = -0.5
+            float drive:linear:physics:targetPosition = -0
             uniform token physics:axis = "X"
             rel physics:body0 = </Root/package_door/Geo_M2_WallDoorCorner3_634>
             rel physics:body1 = </Root/SM_Door_01c10_01>
@@ -7460,7 +7461,7 @@ def Xform "Root" (
         {
             float drive:linear:physics:damping = 100
             float drive:linear:physics:stiffness = 100
-            float drive:linear:physics:targetPosition = 0.5
+            float drive:linear:physics:targetPosition = 0
             uniform token physics:axis = "X"
             rel physics:body0 = </Root/package_door/Geo_M2_WallDoorCorner3_634>
             rel physics:body1 = </Root/SM_Door_01c10>
@@ -8147,6 +8148,533 @@ def Xform "Root" (
             over "wheel_right_link"
             {
             }
+        }
+    }
+
+    def Scope "sensor"
+    {
+        def IsaacLightBeamSensor "door1_front_sensor"
+        {
+            float3 curtainAxis = (0, 0, 1)
+            float curtainLength = 0.5
+            bool drawLines = 1
+            bool drawPoints = 0
+            bool enabled = 1
+            float3 forwardAxis = (1, 0, 0)
+            float maxRange = 1.5
+            float minRange = 0.01
+            int numRays = 5
+            double3 xformOp:rotateXYZ = (0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            double3 xformOp:translate = (-7.7, 7.797132859247679, 0.1)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+        }
+
+        def IsaacLightBeamSensor "door1_back_sensor"
+        {
+            float3 curtainAxis = (0, 0, 1)
+            float curtainLength = 0.5
+            bool drawLines = 0
+            bool drawPoints = 0
+            bool enabled = 1
+            float3 forwardAxis = (1, 0, 0)
+            float maxRange = 1.5
+            float minRange = 0.01
+            int numRays = 5
+            double3 xformOp:rotateXYZ = (0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            double3 xformOp:translate = (-7.7, 8.901693422710137, 0.1)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+        }
+
+        def IsaacLightBeamSensor "door2_front_sensor"
+        {
+            float3 curtainAxis = (0, 0, 1)
+            float curtainLength = 0.5
+            bool drawLines = 0
+            bool drawPoints = 0
+            bool enabled = 1
+            float3 forwardAxis = (1, 0, 0)
+            float maxRange = 1.5
+            float minRange = 0.01
+            int numRays = 5
+            double3 xformOp:rotateXYZ = (0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            double3 xformOp:translate = (6.2, 7.797132859247679, 0.1)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+        }
+
+        def IsaacLightBeamSensor "door2_back_sensor"
+        {
+            float3 curtainAxis = (0, 0, 1)
+            float curtainLength = 0.5
+            bool drawLines = 0
+            bool drawPoints = 0
+            bool enabled = 1
+            float3 forwardAxis = (1, 0, 0)
+            float maxRange = 1.5
+            float minRange = 0.01
+            int numRays = 5
+            double3 xformOp:rotateXYZ = (0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            double3 xformOp:translate = (6.2, 8.901693422710137, 0.1)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+        }
+    }
+
+    def OmniGraph "Sensor_visualyze_ActionGraph"
+    {
+        token evaluationMode = "Automatic"
+        token evaluator:type = "execution"
+        token fabricCacheBacking = "Shared"
+        int2 fileFormatVersion = (1, 9)
+        token pipelineStage = "pipelineStageSimulation"
+
+        def OmniGraphNode "on_playback_tick" (
+            prepend apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            token node:type = "omni.graph.action.OnPlaybackTick"
+            int node:typeVersion = 2
+            custom double outputs:deltaSeconds
+            custom double outputs:frame
+            custom uint outputs:tick (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom double outputs:time
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (-116.047104, 556.0589)
+        }
+
+        def OmniGraphNode "isaac_read_lightbeam_sensor_node" (
+            prepend apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom uint inputs:execIn (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            prepend uint inputs:execIn.connect = </Root/Sensor_visualyze_ActionGraph/on_playback_tick.outputs:tick>
+            custom rel inputs:lightbeamPrim = </Root/sensor/door1_front_sensor> (
+                customData = {
+                    dictionary omni = {
+                        dictionary graph = {
+                            string relType = "target"
+                        }
+                    }
+                }
+            )
+            token node:type = "isaacsim.sensors.physx.IsaacReadLightBeam"
+            int node:typeVersion = 1
+            custom point3f[] outputs:beamEndPoints
+            custom bool[] outputs:beamHitData
+            custom point3f[] outputs:beamOrigins
+            custom uint outputs:execOut (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom point3f[] outputs:hitPosData
+            custom float[] outputs:linearDepthData
+            custom int outputs:numRays
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (264.59695, 94.91123)
+        }
+
+        def OmniGraphNode "isaac_read_lightbeam_sensor_node_01" (
+            prepend apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom uint inputs:execIn (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            prepend uint inputs:execIn.connect = </Root/Sensor_visualyze_ActionGraph/on_playback_tick.outputs:tick>
+            custom rel inputs:lightbeamPrim = </Root/sensor/door1_back_sensor> (
+                customData = {
+                    dictionary omni = {
+                        dictionary graph = {
+                            string relType = "target"
+                        }
+                    }
+                }
+            )
+            token node:type = "isaacsim.sensors.physx.IsaacReadLightBeam"
+            int node:typeVersion = 1
+            custom point3f[] outputs:beamEndPoints
+            custom bool[] outputs:beamHitData
+            custom point3f[] outputs:beamOrigins
+            custom uint outputs:execOut (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom point3f[] outputs:hitPosData
+            custom float[] outputs:linearDepthData
+            custom int outputs:numRays
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (267.59888, 380.3025)
+        }
+
+        def OmniGraphNode "isaac_read_lightbeam_sensor_node_02" (
+            prepend apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom uint inputs:execIn (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            prepend uint inputs:execIn.connect = </Root/Sensor_visualyze_ActionGraph/on_playback_tick.outputs:tick>
+            custom rel inputs:lightbeamPrim = </Root/sensor/door2_front_sensor> (
+                customData = {
+                    dictionary omni = {
+                        dictionary graph = {
+                            string relType = "target"
+                        }
+                    }
+                }
+            )
+            token node:type = "isaacsim.sensors.physx.IsaacReadLightBeam"
+            int node:typeVersion = 1
+            custom point3f[] outputs:beamEndPoints
+            custom bool[] outputs:beamHitData
+            custom point3f[] outputs:beamOrigins
+            custom uint outputs:execOut (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom point3f[] outputs:hitPosData
+            custom float[] outputs:linearDepthData
+            custom int outputs:numRays
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (273.00552, 647.3203)
+        }
+
+        def OmniGraphNode "isaac_read_lightbeam_sensor_node_03" (
+            prepend apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom uint inputs:execIn (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            prepend uint inputs:execIn.connect = </Root/Sensor_visualyze_ActionGraph/on_playback_tick.outputs:tick>
+            custom rel inputs:lightbeamPrim = </Root/sensor/door2_back_sensor> (
+                customData = {
+                    dictionary omni = {
+                        dictionary graph = {
+                            string relType = "target"
+                        }
+                    }
+                }
+            )
+            token node:type = "isaacsim.sensors.physx.IsaacReadLightBeam"
+            int node:typeVersion = 1
+            custom point3f[] outputs:beamEndPoints
+            custom bool[] outputs:beamHitData
+            custom point3f[] outputs:beamOrigins
+            custom uint outputs:execOut (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom point3f[] outputs:hitPosData
+            custom float[] outputs:linearDepthData
+            custom int outputs:numRays
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (274.57898, 915.4203)
+        }
+
+        def OmniGraphNode "isaac_debug_draw_raycast" (
+            prepend apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom point3f[] inputs:beamEndPoints
+            prepend point3f[] inputs:beamEndPoints.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node.outputs:beamEndPoints>
+            custom point3f[] inputs:beamOrigins
+            prepend point3f[] inputs:beamOrigins.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node.outputs:beamOrigins>
+            custom float inputs:beamWidth
+            custom color4f inputs:color
+            custom bool inputs:doTransform
+            custom uint inputs:exec (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            delete uint inputs:exec.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_01.outputs:execOut>
+            prepend uint inputs:exec.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node.outputs:execOut>
+            custom int inputs:numRays
+            prepend int inputs:numRays.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node.outputs:numRays>
+            custom matrix4d inputs:transform
+            token node:type = "isaacsim.util.debug_draw.DebugDrawRayCast"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (708.5127, 84.76729)
+        }
+
+        def OmniGraphNode "isaac_debug_draw_raycast_01" (
+            prepend apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom point3f[] inputs:beamEndPoints
+            prepend point3f[] inputs:beamEndPoints.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_01.outputs:beamEndPoints>
+            custom point3f[] inputs:beamOrigins
+            prepend point3f[] inputs:beamOrigins.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_01.outputs:beamOrigins>
+            custom float inputs:beamWidth
+            custom color4f inputs:color
+            custom bool inputs:doTransform
+            custom uint inputs:exec (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            prepend uint inputs:exec.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_01.outputs:execOut>
+            custom int inputs:numRays
+            prepend int inputs:numRays.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_01.outputs:numRays>
+            custom matrix4d inputs:transform
+            token node:type = "isaacsim.util.debug_draw.DebugDrawRayCast"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (710.8903, 382.16254)
+        }
+
+        def OmniGraphNode "isaac_debug_draw_raycast_02" (
+            prepend apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom point3f[] inputs:beamEndPoints
+            prepend point3f[] inputs:beamEndPoints.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_02.outputs:beamEndPoints>
+            custom point3f[] inputs:beamOrigins
+            prepend point3f[] inputs:beamOrigins.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_02.outputs:beamOrigins>
+            custom float inputs:beamWidth
+            custom color4f inputs:color
+            custom bool inputs:doTransform
+            custom uint inputs:exec (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            prepend uint inputs:exec.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_02.outputs:execOut>
+            custom int inputs:numRays
+            prepend int inputs:numRays.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_02.outputs:numRays>
+            custom matrix4d inputs:transform
+            token node:type = "isaacsim.util.debug_draw.DebugDrawRayCast"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (712.547, 663.803)
+        }
+
+        def OmniGraphNode "isaac_debug_draw_raycast_03" (
+            prepend apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom point3f[] inputs:beamEndPoints
+            prepend point3f[] inputs:beamEndPoints.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_03.outputs:beamEndPoints>
+            custom point3f[] inputs:beamOrigins
+            prepend point3f[] inputs:beamOrigins.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_03.outputs:beamOrigins>
+            custom float inputs:beamWidth
+            custom color4f inputs:color
+            custom bool inputs:doTransform
+            custom uint inputs:exec (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            prepend uint inputs:exec.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_03.outputs:execOut>
+            custom int inputs:numRays
+            prepend int inputs:numRays.connect = </Root/Sensor_visualyze_ActionGraph/isaac_read_lightbeam_sensor_node_03.outputs:numRays>
+            custom matrix4d inputs:transform
+            token node:type = "isaacsim.util.debug_draw.DebugDrawRayCast"
+            int node:typeVersion = 1
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (719.17426, 937.1599)
+        }
+    }
+
+    def OmniGraph "Sensor_ActionGraph"
+    {
+        token evaluationMode = "Automatic"
+        token evaluator:type = "execution"
+        token fabricCacheBacking = "Shared"
+        int2 fileFormatVersion = (1, 9)
+        token pipelineStage = "pipelineStageOnDemand"
+
+        def OmniGraphNode "on_physics_step" (
+            prepend apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            token node:type = "isaacsim.core.nodes.OnPhysicsStep"
+            int node:typeVersion = 1
+            custom double outputs:deltaSimulationTime
+            custom double outputs:deltaSystemTime
+            custom uint outputs:step (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (271.5, 184.5)
+        }
+
+        def OmniGraphNode "script_node" (
+            prepend apiSchemas = ["NodeGraphNodeAPI"]
+        )
+        {
+            custom double inputs:deltaSimulationTime
+            prepend double inputs:deltaSimulationTime.connect = </Root/Sensor_ActionGraph/on_physics_step.outputs:deltaSimulationTime>
+            custom uint inputs:execIn (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            prepend uint inputs:execIn.connect = </Root/Sensor_ActionGraph/on_physics_step.outputs:step>
+            custom string inputs:script = '''import omni.usd
+from isaacsim.sensors.physx import _range_sensor
+
+# =========================================================
+# VIRUS CQC door configuration
+# =========================================================
+DOORS = [
+    {
+        "name": "door1",
+        "sensors": [
+            "/Root/sensor/door1_front_sensor",
+            "/Root/sensor/door1_back_sensor",
+        ],
+        "joints": [
+            {
+                "path": "/Root/door_joint/left_door_Joint",
+                "sign": -1,
+            },
+            {
+                "path": "/Root/door_joint/right_door_Joint",
+                "sign": 1,
+            },
+        ],
+    },
+    {
+        "name": "door2",
+        "sensors": [
+            "/Root/sensor/door2_front_sensor",
+            "/Root/sensor/door2_back_sensor",
+        ],
+        "joints": [
+            {
+                "path": "/Root/door_joint/left_door_Joint1",
+                "sign": -1,
+            },
+            {
+                "path": "/Root/door_joint/right_door_Joint1",
+                "sign": 1,
+            },
+        ],
+    },
+]
+
+ATTR_NAME = "drive:linear:physics:targetPosition"
+OPEN_VALUE = 0.5
+CLOSE_VALUE = 0.0
+CLOSE_DELAY = 3.0
+
+
+def setup(db):
+    state = db.internal_state
+    state.lightbeam = _range_sensor.acquire_lightbeam_sensor_interface()
+    state.clear_times = {door["name"]: 0.0 for door in DOORS}
+    state.door_open_states = {door["name"]: False for door in DOORS}
+    print("VIRUS_CQC_LOG | Action Graph door controller initialized.")
+
+
+def cleanup(db):
+    print("VIRUS_CQC_LOG | Action Graph door controller cleaned up.")
+
+
+def _sensor_hit(lightbeam_interface, sensor_path):
+    try:
+        beam_hit = lightbeam_interface.get_beam_hit_data(sensor_path)
+        return beam_hit is not None and any(beam_hit.astype(bool))
+    except Exception as e:
+        print(f"VIRUS_CQC_LOG | SENSOR_READ_ERROR @ {sensor_path}: {str(e)}")
+        return False
+
+
+def _set_door_target(stage, door, target_value):
+    for joint in door["joints"]:
+        joint_path = joint["path"]
+        sign = joint["sign"]
+
+        prim = stage.GetPrimAtPath(joint_path)
+        if not prim.IsValid():
+            print(f"VIRUS_CQC_LOG | INVALID_PRIM: {joint_path}")
+            continue
+
+        attr = prim.GetAttribute(ATTR_NAME)
+        if not attr.IsValid():
+            print(f"VIRUS_CQC_LOG | INVALID_ATTR: {ATTR_NAME} @ {joint_path}")
+            continue
+
+        attr.Set(sign * target_value)
+
+
+def compute(db):
+    state = db.internal_state
+    dt = db.inputs.deltaSimulationTime
+    stage = omni.usd.get_context().get_stage()
+
+    try:
+        for door in DOORS:
+            door_name = door["name"]
+
+            # Open immediately if either sensor detects an object
+            is_hit = any(_sensor_hit(state.lightbeam, sensor_path) for sensor_path in door["sensors"])
+            current_open = state.door_open_states[door_name]
+
+            if is_hit:
+                desired_open = True
+                state.clear_times[door_name] = 0.0
+            else:
+                # Both sensors are clear
+                if current_open:
+                    state.clear_times[door_name] += dt
+                    desired_open = state.clear_times[door_name] < CLOSE_DELAY
+                else:
+                    state.clear_times[door_name] = 0.0
+                    desired_open = False
+
+            target_value = OPEN_VALUE if desired_open else CLOSE_VALUE
+            _set_door_target(stage, door, target_value)
+
+            if current_open != desired_open:
+                if desired_open:
+                    print(f"VIRUS_CQC_LOG | {door_name}: OPEN")
+                else:
+                    print(f"VIRUS_CQC_LOG | {door_name}: CLOSE (no detection for 3.0 seconds)")
+                state.door_open_states[door_name] = desired_open
+
+        return True
+
+    except Exception as e:
+        print(f"VIRUS_CQC_LOG | RUNTIME_ERROR: {str(e)}")
+        return False'''
+            custom token inputs:scriptPath
+            custom bool inputs:usePath
+            token node:type = "omni.graph.scriptnode.ScriptNode"
+            int node:typeVersion = 2
+            custom uint outputs:execOut (
+                customData = {
+                    bool isExecution = 1
+                }
+            )
+            custom bool state:omni_initialized
+            uniform token ui:nodegraph:node:expansionState = "open"
+            uniform float2 ui:nodegraph:node:pos = (560, 160)
         }
     }
 }

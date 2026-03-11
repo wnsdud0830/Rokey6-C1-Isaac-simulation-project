@@ -17,8 +17,8 @@
                 double radius = 32.87893371582031
             }
             dictionary Perspective = {
-                double3 position = (-20.646816265911234, 6.846531851631552, 9.835821706227438)
-                double3 target = (13.295469023094917, 11.075248277387121, -2.232409968003685)
+                double3 position = (-23.339384969851064, 18.26630866993459, 27.401741377858905)
+                double3 target = (2.940640163888208, 2.572855110417118, -2.200838228799107)
             }
             dictionary Right = {
                 double3 position = (0, -1690509.4609375, -3.7536850537589483e-10)
@@ -71,20 +71,6 @@ def Xform "Root" (
     float3 xformOp:scale = (1, 1, 1)
     double3 xformOp:translate = (0, 0, 0)
     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
-
-    def Xform "Geo_W_TrimStrateBase2_29" (
-        delete apiSchemas = ["PhysicsCollisionAPI"]
-        prepend apiSchemas = ["PhysicsMeshCollisionAPI"]
-        instanceable = true
-        kind = "group"
-        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.0/Isaac/Environments/Hospital/Props/Geo_W_TrimStrateBase2_8_61.usd@
-    )
-    {
-        quatd xformOp:orient = (0.7071089744567871, 0, 0, -0.7071045879095049)
-        double3 xformOp:scale = (0.4197700023651123, 0.5, 1)
-        double3 xformOp:translate = (22.72729843105119, 10.10534461975109, -12.47393567709089)
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-    }
 
     def Xform "Geo_M_Light2_low315" (
         delete apiSchemas = ["PhysicsCollisionAPI"]
@@ -180,7 +166,7 @@ def Xform "Root" (
     {
         quatd xformOp:orient = (1, 0, 0, 0)
         double3 xformOp:scale = (1, 1, 1)
-        double3 xformOp:translate = (6.364695104504005, 14.567798717327946, 0.000039459228515639214)
+        double3 xformOp:translate = (5.62139235880497, 11.758340705550994, 0.000039459228515639214)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
     }
 
@@ -3249,10 +3235,10 @@ def Xform "Root" (
             over "Geo_M2_WallDoorCorner"
             {
                 over "Section0" (
-                    prepend apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxConvexHullCollisionAPI", "PhysicsMeshCollisionAPI", "PhysicsMassAPI"]
+                    prepend apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxConvexHullCollisionAPI", "PhysicsMeshCollisionAPI", "PhysicsMassAPI", "PhysxTriangleMeshCollisionAPI"]
                 )
                 {
-                    uniform token physics:approximation = "convexHull"
+                    uniform token physics:approximation = "none"
                     bool physics:collisionEnabled = 1
                     float physics:density = 1e15
                     float physics:mass = 1000000
@@ -3263,10 +3249,10 @@ def Xform "Root" (
                 }
 
                 over "Section1" (
-                    prepend apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxConvexHullCollisionAPI", "PhysicsMeshCollisionAPI"]
+                    prepend apiSchemas = ["PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxConvexHullCollisionAPI", "PhysicsMeshCollisionAPI", "PhysxTriangleMeshCollisionAPI"]
                 )
                 {
-                    uniform token physics:approximation = "convexHull"
+                    uniform token physics:approximation = "none"
                     bool physics:collisionEnabled = 1
                 }
             }
@@ -3283,20 +3269,6 @@ def Xform "Root" (
             quatd xformOp:orient = (0.000006258487701214347, 0, 0, 0.9999999999804157)
             double3 xformOp:scale = (1, 1.1748936784028607, 1)
             double3 xformOp:translate = (-22.38601318359375, 8.70982083107225, 0.0010010681152343892)
-            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-        }
-
-        def Xform "Geo_M_DoorFloor6" (
-            delete apiSchemas = ["PhysicsCollisionAPI"]
-            prepend apiSchemas = ["PhysicsMeshCollisionAPI"]
-            instanceable = true
-            kind = "group"
-            prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.0/Isaac/Environments/Hospital/Props/Geo_M_DoorFloor_90.usd@
-        )
-        {
-            quatd xformOp:orient = (1, 0, 0, 0)
-            double3 xformOp:scale = (1.05093514919281, 1, 1)
-            double3 xformOp:translate = (-23.727737302512406, 8.84582669113263, 0.00004121398925782671)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
         }
     }
@@ -4845,20 +4817,6 @@ def Xform "Root" (
         float3 xformOp:translate:pivot = (21.085342, -0.72633123, 1.5005203)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:translate:pivot", "xformOp:rotateXYZ", "xformOp:scale", "!invert!xformOp:translate:pivot"]
 
-        def Xform "Geo_M_DoorFloor23" (
-            delete apiSchemas = ["PhysicsCollisionAPI"]
-            prepend apiSchemas = ["PhysicsMeshCollisionAPI"]
-            instanceable = true
-            kind = "group"
-            prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.0/Isaac/Environments/Hospital/Props/Geo_M_DoorFloor_90.usd@
-        )
-        {
-            quatd xformOp:orient = (-0.7071065902709964, 0, 0, 0.7071069721020472)
-            double3 xformOp:scale = (1.0382782220840454, 1, 1)
-            double3 xformOp:translate = (20.86576904296875, -0.16105346679687502, 0.00004083251953126421)
-            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-        }
-
         def Xform "Geo_M_DoorFrame26" (
             delete apiSchemas = ["PhysicsCollisionAPI"]
             prepend apiSchemas = ["PhysicsMeshCollisionAPI"]
@@ -4874,17 +4832,15 @@ def Xform "Root" (
         }
 
         def Xform "Geo_O_DoorWall_918" (
-            delete apiSchemas = ["PhysicsCollisionAPI"]
-            prepend apiSchemas = ["PhysicsMeshCollisionAPI", "PhysicsRigidBodyAPI", "PhysxRigidBodyAPI", "PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxConvexHullCollisionAPI"]
+            delete apiSchemas = ["PhysicsCollisionAPI", "PhysicsRigidBodyAPI", "PhysxRigidBodyAPI"]
+            prepend apiSchemas = ["PhysicsMeshCollisionAPI", "PhysicsCollisionAPI", "PhysxCollisionAPI", "PhysxConvexHullCollisionAPI", "PhysxConvexDecompositionCollisionAPI"]
             instanceable = false
             kind = "group"
             prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.0/Isaac/Environments/Hospital/Props/Geo_O_DoorWall_18.usd@
         )
         {
-            uniform token physics:approximation = "convexHull"
+            uniform token physics:approximation = "convexDecomposition"
             bool physics:collisionEnabled = 1
-            bool physics:kinematicEnabled = 0
-            bool physics:rigidBodyEnabled = 1
             quatd xformOp:orient = (1, 0, 0, 0)
             double3 xformOp:scale = (1, 1, 1)
             double3 xformOp:translate = (20.76000244140625, -4.349998779296875, 0.0010000000000000143)
@@ -7479,7 +7435,7 @@ def Xform "Root" (
         {
             float drive:linear:physics:damping = 100
             float drive:linear:physics:stiffness = 100
-            float drive:linear:physics:targetPosition = -0.5
+            float drive:linear:physics:targetPosition = -0
             uniform token physics:axis = "X"
             rel physics:body0 = </Root/package_room_door/Geo_O_DoorWall_918/Geo_O_DoorWall>
             rel physics:body1 = </SM_Door_01c10_01>
@@ -7499,7 +7455,7 @@ def Xform "Root" (
         {
             float drive:linear:physics:damping = 100
             float drive:linear:physics:stiffness = 100
-            float drive:linear:physics:targetPosition = 0.5
+            float drive:linear:physics:targetPosition = 0
             uniform token physics:axis = "X"
             rel physics:body0 = </Root/package_room_door/Geo_O_DoorWall_918>
             rel physics:body1 = </Root/SM_Door_01c10_02>
@@ -8086,7 +8042,7 @@ def Xform "Root" (
                 active = true
             )
             {
-                quatd xformOp:orient = (1, 0, 0, 0)
+                quatd xformOp:orient = (6.123233995736766e-17, 0, 0, 1)
                 double3 xformOp:scale = (1, 1, 1)
                 double3 xformOp:translate = (-0.026868945310351666, 9.197238526326146e-10, 0.20603655374480326)
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
@@ -8124,9 +8080,9 @@ def Xform "Root" (
                         float physics:breakForce = 3.4028235e38
                         float physics:breakTorque = 3.4028235e38
                         point3f physics:localPos0 = (32.000004, -0.11379976, 22.122208)
-                        point3f physics:localPos1 = (1.0747576, 5.4296595e-7, 2.9363093e-8)
+                        point3f physics:localPos1 = (-1.0747582, 0.00909935, 2.9363093e-8)
                         quatf physics:localRot0 = (1, 0, 0, 0)
-                        quatf physics:localRot1 = (1, 0, 0, 0)
+                        quatf physics:localRot1 = (-3.4228542e-8, 0, 0, 1)
                     }
                 }
             }
@@ -8166,7 +8122,7 @@ def Xform "Root" (
             int numRays = 5
             double3 xformOp:rotateXYZ = (0, 0, 0)
             float3 xformOp:scale = (1, 1, 1)
-            double3 xformOp:translate = (-7.7, 7.797132859247679, 0.1)
+            double3 xformOp:translate = (-7.7, 7.5, 0.1)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
         }
 

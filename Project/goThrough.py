@@ -53,32 +53,29 @@ def main():
     pose6.header.frame_id = 'map'
     pose6.pose.position.x = 6.618
     pose6.pose.position.y = 10.048
-    # pose6.pose.orientation.x = -0.000
-    # pose6.pose.orientation.y = 0.000
-    # pose6.pose.orientation.z = 0.934
-    # pose6.pose.orientation.w = 0.356
     
     pose7 = PoseStamped() # packageroom 순찰
     pose7.header.frame_id = 'map'
-    pose7.pose.position.x = 7.087
-    pose7.pose.position.y = 15.660
-    # pose7.pose.orientation.x = -0.001
-    # pose7.pose.orientation.y = -0.001
-    # pose7.pose.orientation.z = 1.000
-    # pose7.pose.orientation.w = -0.001
+    pose7.pose.position.x = 6.15
+    pose7.pose.position.y = 14.560
     
     pose8 = PoseStamped() # packageroom 나가기 전
     pose8.header.frame_id = 'map'
-    pose8.pose.position.x = 6.922818660736084
-    pose8.pose.position.y = 8.876513481140137
-    
-    pose9 = PoseStamped() # 초기 위치
+    pose8.pose.position.x = 1.5
+    pose8.pose.position.y = 15.5
+
+    pose9 = PoseStamped() # packageroom 나가기 전
     pose9.header.frame_id = 'map'
-    pose9.pose.position.x = -3.0
-    pose9.pose.position.y = 3.5
-    pose9.pose.orientation.w = 1.0
+    pose9.pose.position.x = 6.622818660736084
+    pose9.pose.position.y = 8.66513481140137
     
-    poses = [pose1, pose2, pose4, pose5, pose6, pose7, pose8]
+    pose10 = PoseStamped() # 초기 위치
+    pose10.header.frame_id = 'map'
+    pose10.pose.position.x = -3.0
+    pose10.pose.position.y = 3.5
+    pose10.pose.orientation.w = 1.0
+    
+    poses = [pose0, pose1, pose2, pose4, pose5, pose6, pose7, pose8, pose9]
     nav.goThroughPoses(poses)
     #---------------------------------------------
 
@@ -88,7 +85,7 @@ def main():
             print("Goal_distance:", feedback.distance_remaining)
 
     # 마지막에 초기 위치로 복귀
-    nav.goToPose(pose9)
+    nav.goToPose(pose10)
     
     while not nav.isTaskComplete():
         feedback = nav.getFeedback()

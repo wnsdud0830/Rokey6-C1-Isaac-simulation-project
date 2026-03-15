@@ -1,4 +1,20 @@
-import omni.usd
+#usda 1.0
+
+def "Item_00"
+{
+    def OmniGraphNode "script_node" (
+        prepend apiSchemas = ["NodeGraphNodeAPI"]
+    )
+    {
+        custom double inputs:deltaSimulationTime
+        prepend double inputs:deltaSimulationTime.connect = </Root/Sensor_ActionGraph/on_physics_step.outputs:deltaSimulationTime>
+        custom uint inputs:execIn (
+            customData = {
+                bool isExecution = 1
+            }
+        )
+        prepend uint inputs:execIn.connect = </Root/Sensor_ActionGraph/on_physics_step.outputs:step>
+        custom string inputs:script = '''import omni.usd
 from isaacsim.sensors.physx import _range_sensor
 
 DOORS = [
@@ -190,4 +206,21 @@ def compute(db):
 
     except Exception as e:
         print(f"VIRUS_CQC_LOG | RUNTIME_ERROR: {str(e)}")
-        return False
+        return False'''
+        custom token inputs:scriptPath
+        custom bool inputs:usePath
+        token node:type = "omni.graph.scriptnode.ScriptNode"
+        int node:typeVersion = 2
+        custom uint outputs:execOut (
+            customData = {
+                bool isExecution = 1
+            }
+        )
+        custom string outputs:logMessage
+        custom bool outputs:shouldPublish
+        custom bool state:omni_initialized
+        uniform token ui:nodegraph:node:expansionState = "open"
+        uniform float2 ui:nodegraph:node:pos = (300.32574, 152.33685)
+    }
+}
+

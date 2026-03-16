@@ -117,7 +117,6 @@ flowchart TD
 ## 4. 실행 환경
 
 ### 4.1 Main PC (사용자 제공 스펙)
-아래 정보는 사용자가 제공한 명령 출력값을 그대로 정리한 것이다.
 
 - OS: Ubuntu 22.04.5 LTS
 - Kernel: 6.8.0-101-generic
@@ -129,7 +128,6 @@ flowchart TD
 
 
 ### 4.2 Web 모니터 PC
-- 사용자가 “web을 돌리는 pc가 따로 있다”고 명시했으나, OS/버전 정보는 제공되지 않았다.
 
 ### 4.3 Isaac Sim
 - Isaac Sim 5.0.0
@@ -180,7 +178,7 @@ opencv-contrib-python==4.8.0.74
 - `yolo_detector.py` 직접 import 기준 (ROS 패키지 제외)
   - `ultralytics`
   - `opencv-python`
-- Torch는 Main PC에 이미 설치되어 있으므로(사용자 제공 정보), **`ultralytics` 설치 시 torch를 임의로 교체하지 않도록 주의**한다.
+- Torch는 Main PC에 이미 설치되어 있으므로, **`ultralytics` 설치 시 torch를 임의로 교체하지 않도록 주의**한다.
 
 권장 requirements (pip 영역만):
 ```txt
@@ -210,7 +208,7 @@ websockets
 |---|---|---|---|
 | [ ] | Isaac Sim 실행 스크립트 확인 | `~/isaacsim/isaac-sim.selector.sh` | Isaac Sim 5.0.0 |
 | [ ] | Cleanroom 맵 준비 | `Cleanroom.usd` | Isaac Sim Stage 로드 |
-| [ ] | ROS2 워크스페이스에 `my_pkg` 배치 | 예: `~/IsaacSim-ros_workspaces/humble_ws/src/my_pkg` | 사용자 코드가 절대경로를 참조 |
+| [ ] | ROS2 워크스페이스에 `my_pkg` 배치 | 예: `~/IsaacSim-ros_workspaces/humble_ws/src/my_pkg` | 절대경로를 참조 |
 | [ ] | `my_pkg` 빌드/소스 | `colcon build` 후 `source install/setup.bash` | 환경에 따라 생략/변형 가능 |
 | [ ] | YOLO 모델 경로 확인 | `my_pkg/resource/my_best.pt` | `yolo_detector.py` 내 절대경로 사용 |
 
@@ -247,8 +245,6 @@ ros2 launch turtlebot3_navigation2 navigation2.launch.py \
   map:=/home/rokey/IsaacSim-ros_workspaces/humble_ws/src/turtlebot3/turtlebot3_navigation2/map/cleanroom_map.yaml \
   use_sim_time:=true
 ```
-
-> 이 단계는 사용자가 “start 전 반드시 실행”을 명시한 사항이다.
 
 ## 8. Web 로그 모니터 실행
 

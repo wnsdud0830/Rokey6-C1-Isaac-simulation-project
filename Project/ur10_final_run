@@ -1,0 +1,1492 @@
+import builtins
+import asyncio
+import time
+import random
+import os
+import json
+
+import numpy as np
+import omni.timeline
+import omni.usd
+import omni.kit.app
+
+from omni.kit.viewport.utility import get_active_viewport, capture_viewport_to_file
+
+from pxr import Usd, UsdGeom, Gf, UsdPhysics
+from isaacsim.core.prims import SingleArticulation
+from isaacsim.robot.manipulators.grippers import SurfaceGripper
+from isaacsim.robot_motion.motion_generation import RmpFlow, ArticulationMotionPolicy
+from isaacsim.robot_motion.motion_generation.interface_config_loader import (
+    load_supported_motion_policy_config,
+)
+
+# ============================================================
+# Demo log control
+# ============================================================
+
+_REAL_PRINT = builtins.print
+
+
+def _important_print(*args, **kwargs):
+    _REAL_PRINT(*args, **kwargs)
+
+
+def _silent_print(*args, **kwargs):
+    pass
+
+
+print = _silent_print
+
+# ============================================================
+# Controller registry
+# ============================================================
+
+CURRENT_CONTROLLER_NAME = "_phase_master_giving_received_v23_full_pipeline"
+KNOWN_CONTROLLER_NAMES = [
+    "_phase1_spawn_then_go",
+    "_phase2_grasp_lift",
+    "_phase1_2_integrated",
+    "_delayed_tip_follower",
+    "_phase_master_integrated",
+    "_phase_master_pick_attach_tipfollow_v11_remove_respawn",
+    "_phase_master_pick_attach_tipfollow_v11_2_moveupdate_fallback",
+    "_phase_master_pick_attach_tipfollow_v11_3_respawn_hold_then_physics",
+    "_phase_master_pick_attach_tipfollow_v11_4_respawn_hold_then_physics_with_conveyor_velocity",
+    "_phase_master_pick_attach_tipfollow_v11_5_respawn_hold_move_stop",
+    "_phase_master_pick_attach_tipfollow_v11_5_respawn_hold_move_stop_return_source",
+    "_phase_master_giving_v12_wp000_qr_branch_ab_c",
+    "_phase_master_giving_v13_wp000_qr_offscreen_branch_ab_c",
+    "_phase_master_giving_v13_loop_wp000_qr_offscreen_branch_ab_c",
+    "_phase_master_giving_v14_loop_lazy_qr_init",
+    "_phase_master_giving_v15_loop_lazy_qr_init_action_guard",
+    "_phase_master_giving_v16_loop_lazy_qr_init_action_guard_wp01quat",
+    "_phase_master_giving_v17_loop_qr_roi_upscale",
+    "_phase_master_giving_v18_loop_qr_deque_and_timeline_guard",
+    "_phase_master_giving_v19_loop_qr_hardconfirm_trace",
+    "_phase_master_giving_v20_loop_qr_shutdown_after_detect",
+    "_phase_master_giving_v21_loop_qr_keepalive_timeline_recover",
+    "_phase_master_giving_v22_external_qr_watcher",
+    "_phase_master_giving_v22_external_qr_watcher_full",
+    CURRENT_CONTROLLER_NAME,
+]
+
+# ============================================================
+# Candidate paths
+# ============================================================
+
+GIVING_ROBOT_ROOT_CANDIDATES = [
+    "/Root/ur10_giving",
+    "/Root/ur_10_giving",
+]
+
+RECEIVED_ROBOT_ROOT_CANDIDATES = [
+    "/Root/ur10_recieved",
+    "/Root/ur_10_recieved",
+    "/Root/ur10_received",
+    "/Root/ur_10_received",
+]
+
+WAYPOINT_000_CANDIDATES = [
+    "/Root/way_point_000",
+]
+
+WAYPOINT_01_CANDIDATES = [
+    "/Root/way_point_01",
+]
+
+WAYPOINT_001_CANDIDATES = [
+    "/Root/way_point_001",
+]
+
+PLACE_FOR_A_CANDIDATES = [
+    "/Root/place_for_a",
+]
+
+PLACE_FOR_B_CANDIDATES = [
+    "/Root/place_for_b",
+]
+
+PLACE_FOR_C_CANDIDATES = [
+    "/Root/place_for_c",
+]
+
+GIVING_CAMERA_CANDIDATES = [
+    "/Root/way_point_01_top_camera",
+    "/Root/camera_1",
+]
+
+RECEIVED_CAMERA_CANDIDATES = [
+    "/Root/bottle_move_done_top_camera",
+]
+
+RECEIVED_HOME_CANDIDATES = [
+    "/Root/revieved_home_wp",
+    "/Root/received_home_wp",
+]
+
+EE_LINK_SUFFIX = "/ee_link"
+GRIPPER_TIP_SUFFIX = "/ee_link/gripper_tip"
+SURFACE_GRIPPER_SUFFIX = "/ee_link/SurfaceGripper"
+
+GIVING_REMOVE_BOTTLE_XFORM_PATH = "/Root/bottle_remove_wp"
+GIVING_SPAWN_BOTTLE_XFORM_PATH = "/Root/bottle_spawn_wp"
+MOVE_DONE_XFORM_PATH = "/Root/bottle_move_done"
+
+RECEIVED_LINEAR_MOVE_01_PATH = "/Root/bottle_linear_move_01"
+RECEIVED_LINEAR_GRAP_01_PATH = "/Root/bottle_linear_grap_01"
+RECEIVED_LINEAR_GRAP_03_PATH = "/Root/bottle_linear_grap_03"
+RECEIVED_LINEAR_GRAP_04_PATH = "/Root/bottle_linear_grap_04"
+
+GIVING_ROBOT_ROOT = None
+GIVING_EE_LINK_PATH = None
+GIVING_GRIPPER_TIP_PATH = None
+GIVING_SURFACE_GRIPPER_PATH = None
+
+RECEIVED_ROBOT_ROOT = None
+RECEIVED_EE_LINK_PATH = None
+RECEIVED_GRIPPER_TIP_PATH = None
+
+WAYPOINT_000_PATH = None
+WAYPOINT_01_PATH = None
+WAYPOINT_001_PATH = None
+PLACE_FOR_A_PATH = None
+PLACE_FOR_B_PATH = None
+PLACE_FOR_C_PATH = None
+GIVING_CAMERA_PATH = None
+RECEIVED_CAMERA_PATH = None
+RECEIVED_HOME_PATH = None
+
+# ============================================================
+# QR external watcher config
+# ============================================================
+
+QR_IMAGE_PATH = "/tmp/isaac_qr_input.png"
+QR_RESULT_PATH = "/tmp/qr_result.json"
+QR_RESULT_WAIT_SEC = 6.0
+QR_RESULT_POLL_SEC = 0.10
+QR_CAPTURE_WAIT_SEC = 0.25
+
+QR_FAIL_USE_SELECTED_TYPE = True
+QR_FAIL_DEFAULT_TYPE = "A"
+
+# ============================================================
+# Bottle config
+# ============================================================
+
+BOTTLE_TYPE_TO_USD = {
+    "A": "/home/rokey/Downloads/vial_usd(1)/vial_usd/medicine_A.usdc",
+    "B": "/home/rokey/Downloads/vial_usd(1)/vial_usd/medicine_B.usdc",
+    "C": "/home/rokey/Downloads/vial_usd(1)/vial_usd/medicine_C.usdc",
+}
+
+TEMP_GIVING_BOTTLE_ROOT_PATH = "/Root/temp_giving_bottle_root"
+TEMP_GIVING_ASSET_PRIM_PATH = f"{TEMP_GIVING_BOTTLE_ROOT_PATH}/bottle"
+
+TEMP_RECEIVED_BOTTLE_ROOT_PATH = "/Root/temp_received_bottle_root"
+TEMP_RECEIVED_ASSET_PRIM_PATH = f"{TEMP_RECEIVED_BOTTLE_ROOT_PATH}/bottle"
+
+ATTACH_JOINT_PATH = "/Root/bottle_attach_fixed_joint"
+
+BOTTLE_ROT = (0.0, 0.0, 0.0)
+BOTTLE_SCALE = (1.0, 1.0, 1.0)
+REMOVE_OLD_BOTTLE = True
+FORCE_BOTTLE_TYPE = None
+
+# ============================================================
+# Motion config
+# ============================================================
+
+DELAY_BEFORE_MOVE_SEC = 3.0
+PHYSICS_DT = 1.0 / 60.0
+MAX_MOVE_SEC = 10.0
+
+WAYPOINT_000_TOL = 0.04
+WAYPOINT_01_TOL = 0.04
+WAYPOINT_001_TOL = 0.04
+
+GIVING_REMOVE_POS_TOL = 0.020
+MOVE_DONE_POS_TOL = 0.020
+RECEIVED_LINEAR_MOVE_01_TOL = 0.020
+RECEIVED_LINEAR_GRAP_01_TOL = 0.020
+
+PLACE_FOR_A_TOL = 0.04
+PLACE_FOR_B_TOL = 0.04
+PLACE_FOR_C_TOL = 0.04
+
+HOLD_AFTER_ATTACH_SEC = 0.20
+GIVING_QR_WAIT_AFTER_CLEAR_VIEW_SEC = 3.0
+RECEIVED_QR_WAIT_AFTER_STOP_SEC = 0.75
+GRIP_SETTLE_SEC = 0.35
+FINAL_DELETE_WAIT_SEC = 1.5
+
+# 리시브 홈 복귀 3단계용 상승/접근 높이
+RECEIVED_HOME_RETURN_LIFT_Z = 0.15
+
+GIVING_TIP_ATTACH_LOCAL_OFFSET = np.array([0.0, 0.0, 0.15], dtype=np.float64)
+RECEIVED_TIP_ATTACH_LOCAL_OFFSET = np.array([0.0, 0.0, 0.15], dtype=np.float64)
+
+CONVEYOR_LINEAR_VELOCITY = np.array(
+    [0.335939601, 0.000006115, -0.000000016], dtype=np.float64
+)
+CONVEYOR_SPEED_MPS = float(np.linalg.norm(CONVEYOR_LINEAR_VELOCITY))
+
+# ============================================================
+# Return config
+# ============================================================
+
+RETURN_GIVING_TO_WP000 = True
+RETURN_GIVING_OPEN_GRIPPER = True
+CYCLE_IDLE_SEC = 0.2
+
+# ============================================================
+# Preflight retry config
+# ============================================================
+
+PRECHECK_INITIAL_DELAY_SEC = 3.0
+PRECHECK_RETRY_COUNT = 20
+PRECHECK_RETRY_INTERVAL_SEC = 0.10
+
+# ============================================================
+# Cleanup config
+# ============================================================
+
+STALE_JOINT_HINTS = [
+    "/Root/FixedJoint",
+    "/Root/fixed_joint",
+    ATTACH_JOINT_PATH,
+]
+
+# ============================================================
+# Basic helpers
+# ============================================================
+
+
+def _stage():
+    stage = omni.usd.get_context().get_stage()
+    if stage is None:
+        raise RuntimeError("No USD stage is open.")
+    return stage
+
+
+def _prim(path):
+    prim = _stage().GetPrimAtPath(path)
+    if not prim.IsValid():
+        raise RuntimeError(f"Invalid prim path: {path}")
+    return prim
+
+
+def _has_prim(path):
+    return _stage().GetPrimAtPath(path).IsValid()
+
+
+def _remove_prim_if_exists(path):
+    prim = _stage().GetPrimAtPath(path)
+    if prim.IsValid():
+        _stage().RemovePrim(path)
+        print(f"[CLEANUP] Removed: {path}")
+
+
+def _get_world_pose(path):
+    prim = _prim(path)
+    mat = omni.usd.get_world_transform_matrix(prim)
+    t = mat.ExtractTranslation()
+    q = mat.ExtractRotationQuat()
+
+    pos = np.array([float(t[0]), float(t[1]), float(t[2])], dtype=np.float64)
+    quat_wxyz = np.array(
+        [
+            float(q.GetReal()),
+            float(q.GetImaginary()[0]),
+            float(q.GetImaginary()[1]),
+            float(q.GetImaginary()[2]),
+        ],
+        dtype=np.float64,
+    )
+    return pos, quat_wxyz
+
+
+def _set_xform_srt(prim, translate=None, rotate_xyz=None, scale=None):
+    xform = UsdGeom.Xformable(prim)
+    xform.ClearXformOpOrder()
+
+    if translate is not None:
+        xform.AddTranslateOp().Set(Gf.Vec3d(*translate))
+    if rotate_xyz is not None:
+        xform.AddRotateXYZOp().Set(Gf.Vec3f(*rotate_xyz))
+    if scale is not None:
+        xform.AddScaleOp().Set(Gf.Vec3f(*scale))
+
+
+def _normalize(v):
+    n = np.linalg.norm(v)
+    if n < 1e-12:
+        return v.copy()
+    return v / n
+
+
+def _quat_mul(q1, q2):
+    w1, x1, y1, z1 = q1
+    w2, x2, y2, z2 = q2
+    return np.array(
+        [
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        ],
+        dtype=np.float64,
+    )
+
+
+def _quat_conj(q):
+    return np.array([q[0], -q[1], -q[2], -q[3]], dtype=np.float64)
+
+
+def _rotate_vec(q, v):
+    q = _normalize(q)
+    vq = np.array([0.0, v[0], v[1], v[2]], dtype=np.float64)
+    return _quat_mul(_quat_mul(q, vq), _quat_conj(q))[1:]
+
+
+def _list_root_children():
+    root = _stage().GetPrimAtPath("/Root")
+    children = []
+    if root.IsValid():
+        for child in root.GetChildren():
+            children.append(child.GetPath().pathString)
+    return children
+
+
+def _resolve_first_valid_path(candidates, label):
+    stage = _stage()
+    for path in candidates:
+        if stage.GetPrimAtPath(path).IsValid():
+            print(f"[PATH] {label} = {path}")
+            return path
+    raise RuntimeError(f"{label} not found. tried={candidates}")
+
+
+def _cleanup_stale_joints():
+    stage = _stage()
+
+    for path in STALE_JOINT_HINTS:
+        _remove_prim_if_exists(path)
+
+    to_remove = []
+    for prim in stage.Traverse():
+        if "Joint" not in prim.GetTypeName():
+            continue
+
+        bad = False
+        for rel_name in ["physics:body0", "physics:body1"]:
+            rel = prim.GetRelationship(rel_name)
+            if not rel:
+                continue
+            for tgt in rel.GetTargets():
+                tgt_prim = stage.GetPrimAtPath(tgt)
+                if not tgt_prim.IsValid():
+                    bad = True
+                    break
+            if bad:
+                break
+
+        if bad:
+            to_remove.append(prim.GetPath().pathString)
+
+    for path in to_remove:
+        _remove_prim_if_exists(path)
+
+
+def _cleanup_temp_objects():
+    _remove_prim_if_exists(ATTACH_JOINT_PATH)
+    _remove_prim_if_exists(TEMP_GIVING_BOTTLE_ROOT_PATH)
+    _remove_prim_if_exists(TEMP_RECEIVED_BOTTLE_ROOT_PATH)
+
+
+def _clear_qr_result_files():
+    for p in [QR_IMAGE_PATH, QR_RESULT_PATH]:
+        try:
+            if os.path.exists(p):
+                os.remove(p)
+        except Exception:
+            pass
+
+
+def _shutdown_known_controllers():
+    for name in KNOWN_CONTROLLER_NAMES:
+        obj = globals().get(name)
+        if obj is not None:
+            try:
+                obj.shutdown()
+            except Exception:
+                pass
+        globals()[name] = None
+
+
+def _resolve_runtime_paths():
+    global GIVING_ROBOT_ROOT, GIVING_EE_LINK_PATH, GIVING_GRIPPER_TIP_PATH, GIVING_SURFACE_GRIPPER_PATH
+    global RECEIVED_ROBOT_ROOT, RECEIVED_EE_LINK_PATH, RECEIVED_GRIPPER_TIP_PATH
+    global WAYPOINT_000_PATH, WAYPOINT_01_PATH, WAYPOINT_001_PATH
+    global PLACE_FOR_A_PATH, PLACE_FOR_B_PATH, PLACE_FOR_C_PATH
+    global GIVING_CAMERA_PATH, RECEIVED_CAMERA_PATH, RECEIVED_HOME_PATH
+
+    GIVING_ROBOT_ROOT = _resolve_first_valid_path(GIVING_ROBOT_ROOT_CANDIDATES, "GIVING_ROBOT_ROOT")
+    GIVING_EE_LINK_PATH = f"{GIVING_ROBOT_ROOT}{EE_LINK_SUFFIX}"
+    GIVING_GRIPPER_TIP_PATH = f"{GIVING_ROBOT_ROOT}{GRIPPER_TIP_SUFFIX}"
+    GIVING_SURFACE_GRIPPER_PATH = f"{GIVING_ROBOT_ROOT}{SURFACE_GRIPPER_SUFFIX}"
+
+    RECEIVED_ROBOT_ROOT = _resolve_first_valid_path(RECEIVED_ROBOT_ROOT_CANDIDATES, "RECEIVED_ROBOT_ROOT")
+    RECEIVED_EE_LINK_PATH = f"{RECEIVED_ROBOT_ROOT}{EE_LINK_SUFFIX}"
+    RECEIVED_GRIPPER_TIP_PATH = f"{RECEIVED_ROBOT_ROOT}{GRIPPER_TIP_SUFFIX}"
+
+    WAYPOINT_000_PATH = _resolve_first_valid_path(WAYPOINT_000_CANDIDATES, "WAYPOINT_000_PATH")
+    WAYPOINT_01_PATH = _resolve_first_valid_path(WAYPOINT_01_CANDIDATES, "WAYPOINT_01_PATH")
+    WAYPOINT_001_PATH = _resolve_first_valid_path(WAYPOINT_001_CANDIDATES, "WAYPOINT_001_PATH")
+
+    PLACE_FOR_A_PATH = _resolve_first_valid_path(PLACE_FOR_A_CANDIDATES, "PLACE_FOR_A_PATH")
+    PLACE_FOR_B_PATH = _resolve_first_valid_path(PLACE_FOR_B_CANDIDATES, "PLACE_FOR_B_PATH")
+    PLACE_FOR_C_PATH = _resolve_first_valid_path(PLACE_FOR_C_CANDIDATES, "PLACE_FOR_C_PATH")
+
+    GIVING_CAMERA_PATH = _resolve_first_valid_path(GIVING_CAMERA_CANDIDATES, "GIVING_CAMERA_PATH")
+    RECEIVED_CAMERA_PATH = _resolve_first_valid_path(RECEIVED_CAMERA_CANDIDATES, "RECEIVED_CAMERA_PATH")
+    RECEIVED_HOME_PATH = _resolve_first_valid_path(RECEIVED_HOME_CANDIDATES, "RECEIVED_HOME_PATH")
+
+
+# ============================================================
+# Main controller
+# ============================================================
+
+
+class PhaseMasterGivingReceivedV23:
+    def __init__(self):
+        self.timeline = omni.timeline.get_timeline_interface()
+        self.timeline_sub = self.timeline.get_timeline_event_stream().create_subscription_to_pop(
+            self._on_timeline_event
+        )
+
+        self.task = None
+        self.giving_return_task = None
+
+        self.giving_robot = None
+        self.giving_rmpflow = None
+        self.giving_articulation_rmpflow = None
+        self.giving_gripper = None
+
+        self.received_robot = None
+        self.received_rmpflow = None
+        self.received_articulation_rmpflow = None
+
+        self.giving_follow_active = False
+        self.giving_follow_spawn_root_path = TEMP_GIVING_BOTTLE_ROOT_PATH
+        self.giving_follow_tip_offset = GIVING_TIP_ATTACH_LOCAL_OFFSET.copy()
+
+        self.received_follow_active = False
+        self.received_follow_spawn_root_path = TEMP_RECEIVED_BOTTLE_ROOT_PATH
+        self.received_follow_tip_offset = RECEIVED_TIP_ATTACH_LOCAL_OFFSET.copy()
+
+        self.selected_bottle_type = None
+        self.selected_bottle_usd_path = None
+        self.last_giving_detected_type = None
+        self.last_received_detected_type = None
+
+        self.mesh_move_active = False
+        self.mesh_move_velocity = CONVEYOR_LINEAR_VELOCITY.copy()
+
+        self.output_counter = 0
+        self.wp01_pick_quat = None
+        self.received_home_ee_quat = None
+
+        if self.timeline.is_playing():
+            self.task = asyncio.ensure_future(self.run())
+
+    def shutdown(self):
+        if self.task and not self.task.done():
+            self.task.cancel()
+        self.task = None
+
+        if self.giving_return_task and not self.giving_return_task.done():
+            self.giving_return_task.cancel()
+        self.giving_return_task = None
+
+        if self.timeline_sub is not None:
+            try:
+                self.timeline_sub.unsubscribe()
+            except Exception:
+                pass
+        self.timeline_sub = None
+
+        _cleanup_temp_objects()
+
+        self.giving_robot = None
+        self.giving_rmpflow = None
+        self.giving_articulation_rmpflow = None
+        self.giving_gripper = None
+
+        self.received_robot = None
+        self.received_rmpflow = None
+        self.received_articulation_rmpflow = None
+
+        self.giving_follow_active = False
+        self.received_follow_active = False
+        self.mesh_move_active = False
+
+    def _on_timeline_event(self, event):
+        etype = event.type
+
+        if etype == omni.timeline.TimelineEventType.PLAY.value:
+            if self.task is None or self.task.done():
+                self.task = asyncio.ensure_future(self.run())
+
+        elif etype == omni.timeline.TimelineEventType.STOP.value:
+            self.giving_follow_active = False
+            self.received_follow_active = False
+            self.mesh_move_active = False
+
+            if self.task and not self.task.done():
+                self.task.cancel()
+            self.task = None
+
+            if self.giving_return_task and not self.giving_return_task.done():
+                self.giving_return_task.cancel()
+            self.giving_return_task = None
+
+            _cleanup_temp_objects()
+
+        elif etype == omni.timeline.TimelineEventType.PAUSE.value:
+            if self.task and not self.task.done():
+                self.task.cancel()
+            self.task = None
+
+            if self.giving_return_task and not self.giving_return_task.done():
+                self.giving_return_task.cancel()
+            self.giving_return_task = None
+
+    async def _wait_for_required_prims(self):
+        await asyncio.sleep(PRECHECK_INITIAL_DELAY_SEC)
+
+        for _ in range(PRECHECK_RETRY_COUNT):
+            if not self.timeline.is_playing():
+                return False
+
+            try:
+                _resolve_runtime_paths()
+                required = [
+                    GIVING_ROBOT_ROOT,
+                    GIVING_EE_LINK_PATH,
+                    GIVING_GRIPPER_TIP_PATH,
+                    GIVING_SURFACE_GRIPPER_PATH,
+                    RECEIVED_ROBOT_ROOT,
+                    RECEIVED_EE_LINK_PATH,
+                    RECEIVED_GRIPPER_TIP_PATH,
+                    WAYPOINT_000_PATH,
+                    WAYPOINT_01_PATH,
+                    WAYPOINT_001_PATH,
+                    PLACE_FOR_A_PATH,
+                    PLACE_FOR_B_PATH,
+                    PLACE_FOR_C_PATH,
+                    GIVING_CAMERA_PATH,
+                    RECEIVED_CAMERA_PATH,
+                    RECEIVED_HOME_PATH,
+                    GIVING_REMOVE_BOTTLE_XFORM_PATH,
+                    GIVING_SPAWN_BOTTLE_XFORM_PATH,
+                    MOVE_DONE_XFORM_PATH,
+                    RECEIVED_LINEAR_MOVE_01_PATH,
+                    RECEIVED_LINEAR_GRAP_01_PATH,
+                    RECEIVED_LINEAR_GRAP_03_PATH,
+                    RECEIVED_LINEAR_GRAP_04_PATH,
+                ]
+                if not [p for p in required if not _has_prim(p)]:
+                    return True
+            except Exception:
+                pass
+
+            await asyncio.sleep(PRECHECK_RETRY_INTERVAL_SEC)
+
+        return False
+
+    def _load_rmp_config(self):
+        return load_supported_motion_policy_config("UR10", "RMPflow")
+
+    async def _ensure_runtime_ready(self):
+        _prim(GIVING_ROBOT_ROOT)
+        _prim(GIVING_EE_LINK_PATH)
+        _prim(GIVING_GRIPPER_TIP_PATH)
+        _prim(GIVING_SURFACE_GRIPPER_PATH)
+
+        _prim(RECEIVED_ROBOT_ROOT)
+        _prim(RECEIVED_EE_LINK_PATH)
+        _prim(RECEIVED_GRIPPER_TIP_PATH)
+
+        _prim(WAYPOINT_000_PATH)
+        _prim(WAYPOINT_01_PATH)
+        _prim(WAYPOINT_001_PATH)
+        _prim(PLACE_FOR_A_PATH)
+        _prim(PLACE_FOR_B_PATH)
+        _prim(PLACE_FOR_C_PATH)
+        _prim(GIVING_CAMERA_PATH)
+        _prim(RECEIVED_CAMERA_PATH)
+        _prim(RECEIVED_HOME_PATH)
+
+        if self.giving_robot is None:
+            self.giving_robot = SingleArticulation(
+                prim_path=GIVING_ROBOT_ROOT,
+                name="ur10_giving_robot",
+            )
+            self.giving_robot.initialize()
+
+        if self.giving_rmpflow is None:
+            cfg = self._load_rmp_config()
+            self.giving_rmpflow = RmpFlow(**cfg)
+            self.giving_articulation_rmpflow = ArticulationMotionPolicy(
+                self.giving_robot, self.giving_rmpflow
+            )
+
+        if self.giving_gripper is None:
+            self.giving_gripper = SurfaceGripper(
+                end_effector_prim_path=GIVING_EE_LINK_PATH,
+                surface_gripper_path=GIVING_SURFACE_GRIPPER_PATH,
+            )
+            self.giving_gripper.initialize(articulation_num_dofs=self.giving_robot.num_dof)
+            self.giving_gripper.open()
+
+        if self.received_robot is None:
+            self.received_robot = SingleArticulation(
+                prim_path=RECEIVED_ROBOT_ROOT,
+                name="ur10_received_robot",
+            )
+            self.received_robot.initialize()
+
+        if self.received_rmpflow is None:
+            cfg = self._load_rmp_config()
+            self.received_rmpflow = RmpFlow(**cfg)
+            self.received_articulation_rmpflow = ArticulationMotionPolicy(
+                self.received_robot, self.received_rmpflow
+            )
+
+        await asyncio.sleep(PHYSICS_DT * 2)
+
+        if self.received_home_ee_quat is None:
+            self.received_home_ee_quat = _get_world_pose(RECEIVED_EE_LINK_PATH)[1].copy()
+
+    async def _move_giving_ee_goal(self, ee_goal_pos, ee_goal_quat, label, tol):
+        start = time.monotonic()
+
+        while self.timeline.is_playing():
+            robot_base_pos, robot_base_quat = self.giving_robot.get_world_pose()
+            self.giving_rmpflow.set_robot_base_pose(robot_base_pos, robot_base_quat)
+            self.giving_rmpflow.update_world()
+            self.giving_rmpflow.set_end_effector_target(ee_goal_pos, ee_goal_quat)
+
+            action = self.giving_articulation_rmpflow.get_next_articulation_action(PHYSICS_DT)
+            self.giving_robot.apply_action(action)
+
+            if self.giving_follow_active:
+                self._update_followed_giving_temp_bottle_pose()
+
+            ee_pos, _ = _get_world_pose(GIVING_EE_LINK_PATH)
+            err = np.linalg.norm(ee_pos - ee_goal_pos)
+
+            if err <= tol:
+                return True
+
+            if time.monotonic() - start > MAX_MOVE_SEC:
+                return False
+
+            await asyncio.sleep(PHYSICS_DT)
+
+        return False
+
+    async def _move_received_ee_goal(self, ee_goal_pos, ee_goal_quat, label, tol):
+        start = time.monotonic()
+
+        while self.timeline.is_playing():
+            robot_base_pos, robot_base_quat = self.received_robot.get_world_pose()
+            self.received_rmpflow.set_robot_base_pose(robot_base_pos, robot_base_quat)
+            self.received_rmpflow.update_world()
+            self.received_rmpflow.set_end_effector_target(ee_goal_pos, ee_goal_quat)
+
+            action = self.received_articulation_rmpflow.get_next_articulation_action(PHYSICS_DT)
+            self.received_robot.apply_action(action)
+
+            if self.received_follow_active:
+                self._update_followed_received_temp_bottle_pose()
+
+            ee_pos, _ = _get_world_pose(RECEIVED_EE_LINK_PATH)
+            err = np.linalg.norm(ee_pos - ee_goal_pos)
+
+            if err <= tol:
+                return True
+
+            if time.monotonic() - start > MAX_MOVE_SEC:
+                return False
+
+            await asyncio.sleep(PHYSICS_DT)
+
+        return False
+
+    async def _move_giving_to_xform_keep_current_quat(self, xform_path, label, tol):
+        tgt_pos, _ = _get_world_pose(xform_path)
+        current_ee_quat = _get_world_pose(GIVING_EE_LINK_PATH)[1]
+        return await self._move_giving_ee_goal(
+            ee_goal_pos=tgt_pos,
+            ee_goal_quat=current_ee_quat,
+            label=label,
+            tol=tol,
+        )
+
+    async def _move_received_to_xform_keep_current_quat(self, xform_path, label, tol):
+        tgt_pos, _ = _get_world_pose(xform_path)
+        current_ee_quat = _get_world_pose(RECEIVED_EE_LINK_PATH)[1]
+        return await self._move_received_ee_goal(
+            ee_goal_pos=tgt_pos,
+            ee_goal_quat=current_ee_quat,
+            label=label,
+            tol=tol,
+        )
+
+    async def _move_giving_to_wp01_with_saved_pick_quat(self, label, tol):
+        wp01_pos, _ = _get_world_pose(WAYPOINT_01_PATH)
+        if self.wp01_pick_quat is not None:
+            target_quat = self.wp01_pick_quat.copy()
+        else:
+            target_quat = _get_world_pose(GIVING_EE_LINK_PATH)[1]
+
+        return await self._move_giving_ee_goal(
+            ee_goal_pos=wp01_pos,
+            ee_goal_quat=target_quat,
+            label=label,
+            tol=tol,
+        )
+
+    async def _close_giving_gripper_and_settle(self):
+        self.giving_gripper.close()
+        start = time.monotonic()
+        while self.timeline.is_playing() and (time.monotonic() - start) < GRIP_SETTLE_SEC:
+            self.giving_gripper.update()
+            await asyncio.sleep(PHYSICS_DT)
+
+    def _next_unique_root(self, prefix: str) -> str:
+        self.output_counter += 1
+        return f"{prefix}_{self.output_counter:03d}"
+
+    def _choose_bottle_type(self):
+        if FORCE_BOTTLE_TYPE is not None:
+            t = FORCE_BOTTLE_TYPE
+        else:
+            t = random.choice(["A", "B", "C"])
+
+        if t not in BOTTLE_TYPE_TO_USD:
+            raise RuntimeError(f"Unknown bottle type selected: {t}")
+
+        return t, BOTTLE_TYPE_TO_USD[t]
+
+    def _get_fallback_bottle_type(self, explicit_fallback=None):
+        if explicit_fallback in ["A", "B", "C"]:
+            return explicit_fallback
+
+        if self.selected_bottle_type in ["A", "B", "C"]:
+            return self.selected_bottle_type
+
+        if FORCE_BOTTLE_TYPE in ["A", "B", "C"]:
+            return FORCE_BOTTLE_TYPE
+
+        if QR_FAIL_DEFAULT_TYPE in ["A", "B", "C"]:
+            return QR_FAIL_DEFAULT_TYPE
+
+        return None
+
+    def _spawn_temp_giving_bottle_attached_to_tip(self):
+        stage = _stage()
+        tip_pos, tip_quat = _get_world_pose(GIVING_GRIPPER_TIP_PATH)
+
+        if REMOVE_OLD_BOTTLE:
+            _remove_prim_if_exists(ATTACH_JOINT_PATH)
+            _remove_prim_if_exists(TEMP_GIVING_BOTTLE_ROOT_PATH)
+
+        bottle_type, usd_path = self._choose_bottle_type()
+        self.selected_bottle_type = bottle_type
+        self.selected_bottle_usd_path = usd_path
+
+        spawn_world_pos = tip_pos + _rotate_vec(tip_quat, GIVING_TIP_ATTACH_LOCAL_OFFSET)
+
+        spawn_root = UsdGeom.Xform.Define(stage, TEMP_GIVING_BOTTLE_ROOT_PATH).GetPrim()
+        _set_xform_srt(
+            spawn_root,
+            translate=(
+                float(spawn_world_pos[0]),
+                float(spawn_world_pos[1]),
+                float(spawn_world_pos[2]),
+            ),
+            rotate_xyz=BOTTLE_ROT,
+            scale=BOTTLE_SCALE,
+        )
+
+        asset_prim = UsdGeom.Xform.Define(stage, TEMP_GIVING_ASSET_PRIM_PATH).GetPrim()
+        asset_prim.GetReferences().AddReference(usd_path)
+        _set_xform_srt(
+            asset_prim,
+            translate=(0.0, 0.0, 0.0),
+            rotate_xyz=(0.0, 0.0, 0.0),
+            scale=(1.0, 1.0, 1.0),
+        )
+
+        self.giving_follow_active = True
+        self.giving_follow_spawn_root_path = TEMP_GIVING_BOTTLE_ROOT_PATH
+        self.giving_follow_tip_offset = GIVING_TIP_ATTACH_LOCAL_OFFSET.copy()
+
+        _important_print(f"[GIVING] Selected type: {bottle_type}")
+
+    def _update_followed_giving_temp_bottle_pose(self):
+        if not self.giving_follow_active:
+            return
+        if not _has_prim(self.giving_follow_spawn_root_path):
+            return
+
+        tip_pos, tip_quat = _get_world_pose(GIVING_GRIPPER_TIP_PATH)
+        spawn_world_pos = tip_pos + _rotate_vec(tip_quat, self.giving_follow_tip_offset)
+        spawn_root = _prim(self.giving_follow_spawn_root_path)
+
+        _set_xform_srt(
+            spawn_root,
+            translate=(
+                float(spawn_world_pos[0]),
+                float(spawn_world_pos[1]),
+                float(spawn_world_pos[2]),
+            ),
+            rotate_xyz=BOTTLE_ROT,
+            scale=BOTTLE_SCALE,
+        )
+
+    def _detach_temp_giving_bottle_in_place(self):
+        self.giving_follow_active = False
+        _remove_prim_if_exists(ATTACH_JOINT_PATH)
+
+    def _attach_existing_temp_giving_bottle_to_tip(self):
+        if not _has_prim(TEMP_GIVING_BOTTLE_ROOT_PATH):
+            raise RuntimeError("Giving temp bottle root missing; cannot re-attach.")
+
+        self.giving_follow_active = True
+        self.giving_follow_spawn_root_path = TEMP_GIVING_BOTTLE_ROOT_PATH
+        self.giving_follow_tip_offset = GIVING_TIP_ATTACH_LOCAL_OFFSET.copy()
+        self._update_followed_giving_temp_bottle_pose()
+
+    def _delete_temp_giving_bottle(self):
+        self.giving_follow_active = False
+        _remove_prim_if_exists(ATTACH_JOINT_PATH)
+        _remove_prim_if_exists(TEMP_GIVING_BOTTLE_ROOT_PATH)
+
+    def _spawn_temp_received_bottle_attached_to_tip(self, bottle_type: str):
+        if bottle_type not in BOTTLE_TYPE_TO_USD:
+            raise RuntimeError(f"Unknown received bottle type: {bottle_type}")
+
+        stage = _stage()
+        tip_pos, tip_quat = _get_world_pose(RECEIVED_GRIPPER_TIP_PATH)
+
+        _remove_prim_if_exists(TEMP_RECEIVED_BOTTLE_ROOT_PATH)
+
+        spawn_world_pos = tip_pos + _rotate_vec(tip_quat, RECEIVED_TIP_ATTACH_LOCAL_OFFSET)
+
+        spawn_root = UsdGeom.Xform.Define(stage, TEMP_RECEIVED_BOTTLE_ROOT_PATH).GetPrim()
+        _set_xform_srt(
+            spawn_root,
+            translate=(
+                float(spawn_world_pos[0]),
+                float(spawn_world_pos[1]),
+                float(spawn_world_pos[2]),
+            ),
+            rotate_xyz=BOTTLE_ROT,
+            scale=BOTTLE_SCALE,
+        )
+
+        asset_prim = UsdGeom.Xform.Define(stage, TEMP_RECEIVED_ASSET_PRIM_PATH).GetPrim()
+        asset_prim.GetReferences().AddReference(BOTTLE_TYPE_TO_USD[bottle_type])
+        _set_xform_srt(
+            asset_prim,
+            translate=(0.0, 0.0, 0.0),
+            rotate_xyz=(0.0, 0.0, 0.0),
+            scale=(1.0, 1.0, 1.0),
+        )
+
+        self.received_follow_active = True
+        self.received_follow_spawn_root_path = TEMP_RECEIVED_BOTTLE_ROOT_PATH
+        self.received_follow_tip_offset = RECEIVED_TIP_ATTACH_LOCAL_OFFSET.copy()
+
+    def _update_followed_received_temp_bottle_pose(self):
+        if not self.received_follow_active:
+            return
+        if not _has_prim(self.received_follow_spawn_root_path):
+            return
+
+        tip_pos, tip_quat = _get_world_pose(RECEIVED_GRIPPER_TIP_PATH)
+        spawn_world_pos = tip_pos + _rotate_vec(tip_quat, self.received_follow_tip_offset)
+        spawn_root = _prim(self.received_follow_spawn_root_path)
+
+        _set_xform_srt(
+            spawn_root,
+            translate=(
+                float(spawn_world_pos[0]),
+                float(spawn_world_pos[1]),
+                float(spawn_world_pos[2]),
+            ),
+            rotate_xyz=BOTTLE_ROT,
+            scale=BOTTLE_SCALE,
+        )
+
+    def _detach_temp_received_bottle_in_place(self):
+        self.received_follow_active = False
+
+    def _delete_temp_received_bottle(self):
+        self.received_follow_active = False
+        _remove_prim_if_exists(TEMP_RECEIVED_BOTTLE_ROOT_PATH)
+
+    def _spawn_bottle_at_xform(self, root_path: str, xform_path: str, usd_path: str):
+        stage = _stage()
+        tgt_pos, _ = _get_world_pose(xform_path)
+
+        _remove_prim_if_exists(root_path)
+
+        spawn_root = UsdGeom.Xform.Define(stage, root_path).GetPrim()
+        _set_xform_srt(
+            spawn_root,
+            translate=(float(tgt_pos[0]), float(tgt_pos[1]), float(tgt_pos[2])),
+            rotate_xyz=BOTTLE_ROT,
+            scale=BOTTLE_SCALE,
+        )
+
+        asset_prim = UsdGeom.Xform.Define(stage, f"{root_path}/bottle").GetPrim()
+        asset_prim.GetReferences().AddReference(usd_path)
+        _set_xform_srt(
+            asset_prim,
+            translate=(0.0, 0.0, 0.0),
+            rotate_xyz=(0.0, 0.0, 0.0),
+            scale=(1.0, 1.0, 1.0),
+        )
+
+    def _best_effort_enable_physics(self, root_path: str):
+        root_prim = _prim(root_path)
+
+        rb = UsdPhysics.RigidBodyAPI.Apply(root_prim)
+        try:
+            rb.CreateKinematicEnabledAttr(False)
+        except Exception:
+            pass
+
+        try:
+            rb.CreateStartsAsleepAttr(False)
+        except Exception:
+            pass
+
+        for prim in Usd.PrimRange(root_prim):
+            try:
+                if prim.IsA(UsdGeom.Mesh):
+                    UsdPhysics.CollisionAPI.Apply(prim)
+            except Exception:
+                pass
+
+    def _spawn_bottle_with_physics_at_xform(self, root_path: str, xform_path: str, usd_path: str):
+        self._spawn_bottle_at_xform(root_path, xform_path, usd_path)
+        self._best_effort_enable_physics(root_path)
+
+    async def _move_mesh_until_stop(self, root_path: str, stop_xform_path: str):
+        if not _has_prim(root_path):
+            return False
+
+        self.mesh_move_active = True
+
+        while self.timeline.is_playing() and self.mesh_move_active and _has_prim(root_path):
+            root_prim = _prim(root_path)
+            cur_pos, _ = _get_world_pose(root_path)
+            next_pos = cur_pos + self.mesh_move_velocity * PHYSICS_DT
+
+            _set_xform_srt(
+                root_prim,
+                translate=(float(next_pos[0]), float(next_pos[1]), float(next_pos[2])),
+                rotate_xyz=BOTTLE_ROT,
+                scale=BOTTLE_SCALE,
+            )
+
+            stop_pos, _ = _get_world_pose(stop_xform_path)
+            err = np.linalg.norm(next_pos - stop_pos)
+
+            if err <= MOVE_DONE_POS_TOL:
+                self.mesh_move_active = False
+                return True
+
+            await asyncio.sleep(PHYSICS_DT)
+
+        return False
+
+    async def _move_mesh_to_xform(
+        self,
+        root_path: str,
+        target_xform_path: str,
+        tol: float,
+        speed_mps: float,
+        label: str,
+    ):
+        if not _has_prim(root_path):
+            return False
+
+        while self.timeline.is_playing() and _has_prim(root_path):
+            root_prim = _prim(root_path)
+            cur_pos, _ = _get_world_pose(root_path)
+            tgt_pos, _ = _get_world_pose(target_xform_path)
+
+            diff = tgt_pos - cur_pos
+            err = np.linalg.norm(diff)
+
+            if err <= tol:
+                return True
+
+            step = min(speed_mps * PHYSICS_DT, err)
+            move_dir = _normalize(diff)
+            next_pos = cur_pos + move_dir * step
+
+            _set_xform_srt(
+                root_prim,
+                translate=(float(next_pos[0]), float(next_pos[1]), float(next_pos[2])),
+                rotate_xyz=BOTTLE_ROT,
+                scale=BOTTLE_SCALE,
+            )
+
+            await asyncio.sleep(PHYSICS_DT)
+
+        return False
+
+    async def _capture_camera_to_file(self, camera_path: str, out_path: str):
+        _prim(camera_path)
+
+        viewport = get_active_viewport()
+        if viewport is None:
+            raise RuntimeError("Active viewport not found.")
+
+        old_camera = viewport.camera_path
+
+        try:
+            if os.path.exists(out_path):
+                os.remove(out_path)
+
+            viewport.camera_path = camera_path
+            await omni.kit.app.get_app().next_update_async()
+            await asyncio.sleep(QR_CAPTURE_WAIT_SEC)
+            await omni.kit.app.get_app().next_update_async()
+
+            capture_viewport_to_file(viewport, out_path)
+
+            timeout = time.monotonic() + 5.0
+            while time.monotonic() < timeout:
+                if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+                    return
+                await asyncio.sleep(0.05)
+                await omni.kit.app.get_app().next_update_async()
+
+            raise RuntimeError(f"Capture file was not created: {out_path}")
+
+        finally:
+            try:
+                viewport.camera_path = old_camera
+                await omni.kit.app.get_app().next_update_async()
+            except Exception:
+                pass
+
+    async def _wait_external_qr_result(self, timeout_sec: float):
+        start = time.monotonic()
+        last_payload = None
+
+        while time.monotonic() - start <= timeout_sec:
+            if os.path.exists(QR_RESULT_PATH):
+                try:
+                    with open(QR_RESULT_PATH, "r", encoding="utf-8") as f:
+                        payload = json.load(f)
+                    last_payload = payload
+
+                    if payload.get("ok") is True and payload.get("detected_type") in ["A", "B", "C"]:
+                        return payload["detected_type"]
+
+                except Exception:
+                    pass
+
+            await asyncio.sleep(QR_RESULT_POLL_SEC)
+
+        raise RuntimeError(f"External QR result timeout. last_payload={last_payload}")
+
+    async def _detect_bottle_type_from_camera(self, camera_path: str, fallback_type=None, log_label="qr"):
+        _clear_qr_result_files()
+
+        try:
+            await self._capture_camera_to_file(camera_path, QR_IMAGE_PATH)
+            detected_type = await self._wait_external_qr_result(QR_RESULT_WAIT_SEC)
+
+            if detected_type not in ["A", "B", "C"]:
+                raise RuntimeError(f"Unexpected detected type: {detected_type}")
+
+            return detected_type
+
+        except Exception:
+            if QR_FAIL_USE_SELECTED_TYPE:
+                fallback = self._get_fallback_bottle_type(explicit_fallback=fallback_type)
+                if fallback in ["A", "B", "C"]:
+                    return fallback
+            raise
+
+    async def _return_giving_to_wp000(self):
+        if self.giving_robot is None:
+            return False
+
+        _prim(WAYPOINT_000_PATH)
+
+        if RETURN_GIVING_OPEN_GRIPPER and self.giving_gripper is not None:
+            self.giving_gripper.open()
+
+        pos, _ = _get_world_pose(WAYPOINT_000_PATH)
+        current_ee_quat = _get_world_pose(GIVING_EE_LINK_PATH)[1]
+
+        return await self._move_giving_ee_goal(
+            ee_goal_pos=pos,
+            ee_goal_quat=current_ee_quat,
+            label=f"return to {WAYPOINT_000_PATH}",
+            tol=WAYPOINT_000_TOL,
+        )
+
+    async def _return_received_to_home(self):
+        if self.received_robot is None:
+            return False
+
+        _prim(RECEIVED_HOME_PATH)
+
+        current_pos, current_quat = _get_world_pose(RECEIVED_EE_LINK_PATH)
+        home_pos, _ = _get_world_pose(RECEIVED_HOME_PATH)
+
+        if self.received_home_ee_quat is None:
+            self.received_home_ee_quat = _get_world_pose(RECEIVED_EE_LINK_PATH)[1].copy()
+
+        # 1) 현재 위치에서 위로 retreat
+        retreat_pos = current_pos + np.array([0.0, 0.0, RECEIVED_HOME_RETURN_LIFT_Z], dtype=np.float64)
+        ok = await self._move_received_ee_goal(
+            ee_goal_pos=retreat_pos,
+            ee_goal_quat=current_quat,
+            label="received retreat up",
+            tol=RECEIVED_LINEAR_GRAP_01_TOL,
+        )
+        if not ok:
+            return False
+
+        # 2) home 위쪽 approach 위치로 이동 (현재 quat 유지)
+        approach_pos = home_pos + np.array([0.0, 0.0, RECEIVED_HOME_RETURN_LIFT_Z], dtype=np.float64)
+        ok = await self._move_received_ee_goal(
+            ee_goal_pos=approach_pos,
+            ee_goal_quat=current_quat,
+            label="received move to home approach",
+            tol=RECEIVED_LINEAR_GRAP_01_TOL,
+        )
+        if not ok:
+            return False
+
+        # 3) home 최종 위치 + 저장된 정상 standby quat로 정렬
+        ok = await self._move_received_ee_goal(
+            ee_goal_pos=home_pos,
+            ee_goal_quat=self.received_home_ee_quat.copy(),
+            label=f"return to {RECEIVED_HOME_PATH}",
+            tol=RECEIVED_LINEAR_GRAP_01_TOL,
+        )
+        return ok
+
+    async def _wait_and_delete_root(self, root_path: str, wait_sec: float, label: str):
+        start = time.monotonic()
+        while self.timeline.is_playing() and (time.monotonic() - start) < wait_sec:
+            await asyncio.sleep(PHYSICS_DT)
+
+        if not self.timeline.is_playing():
+            return False
+
+        _remove_prim_if_exists(root_path)
+        return True
+
+    async def _process_c_final(self):
+        if RETURN_GIVING_TO_WP000:
+            await self._return_giving_to_wp000()
+
+        ok = await self._wait_and_delete_root(
+            TEMP_GIVING_BOTTLE_ROOT_PATH,
+            FINAL_DELETE_WAIT_SEC,
+            label="final C bottle",
+        )
+        return ok
+
+    async def _process_ab_received_pipeline(self, downstream_root: str, giving_detected_type: str):
+        if not _has_prim(downstream_root):
+            raise RuntimeError(f"Downstream bottle root missing: {downstream_root}")
+
+        await asyncio.sleep(RECEIVED_QR_WAIT_AFTER_STOP_SEC)
+
+        received_detected_type = await self._detect_bottle_type_from_camera(
+            RECEIVED_CAMERA_PATH,
+            fallback_type=giving_detected_type,
+            log_label="received_qr",
+        )
+        self.last_received_detected_type = received_detected_type
+
+        ok = await self._move_mesh_to_xform(
+            downstream_root,
+            RECEIVED_LINEAR_MOVE_01_PATH,
+            tol=RECEIVED_LINEAR_MOVE_01_TOL,
+            speed_mps=max(CONVEYOR_SPEED_MPS, 0.10),
+            label="move bottle from move_done to linear_move_01",
+        )
+        if not ok:
+            return False
+
+        ok = await self._move_received_to_xform_keep_current_quat(
+            RECEIVED_LINEAR_GRAP_01_PATH,
+            label=f"move received robot to {RECEIVED_LINEAR_GRAP_01_PATH}",
+            tol=RECEIVED_LINEAR_GRAP_01_TOL,
+        )
+        if not ok:
+            return False
+
+        _remove_prim_if_exists(downstream_root)
+
+        self._spawn_temp_received_bottle_attached_to_tip(received_detected_type)
+        await asyncio.sleep(HOLD_AFTER_ATTACH_SEC)
+
+        if received_detected_type == "A":
+            final_place_path = PLACE_FOR_A_PATH
+            final_tol = PLACE_FOR_A_TOL
+        elif received_detected_type == "B":
+            final_place_path = PLACE_FOR_B_PATH
+            final_tol = PLACE_FOR_B_TOL
+        else:
+            raise RuntimeError(f"Received stage only expects A/B, got {received_detected_type}")
+
+        grap03_pos, _ = _get_world_pose(RECEIVED_LINEAR_GRAP_03_PATH)
+        carry_quat = _get_world_pose(RECEIVED_EE_LINK_PATH)[1]
+        ok = await self._move_received_ee_goal(
+            ee_goal_pos=grap03_pos,
+            ee_goal_quat=carry_quat,
+            label=f"carry received bottle via {RECEIVED_LINEAR_GRAP_03_PATH}",
+            tol=RECEIVED_LINEAR_GRAP_01_TOL,
+        )
+        if not ok:
+            return False
+
+        grap04_pos, _ = _get_world_pose(RECEIVED_LINEAR_GRAP_04_PATH)
+        carry_quat = _get_world_pose(RECEIVED_EE_LINK_PATH)[1]
+        ok = await self._move_received_ee_goal(
+            ee_goal_pos=grap04_pos,
+            ee_goal_quat=carry_quat,
+            label=f"carry received bottle via {RECEIVED_LINEAR_GRAP_04_PATH}",
+            tol=RECEIVED_LINEAR_GRAP_01_TOL,
+        )
+        if not ok:
+            return False
+
+        final_place_pos, _ = _get_world_pose(final_place_path)
+        carry_quat = _get_world_pose(RECEIVED_EE_LINK_PATH)[1]
+        ok = await self._move_received_ee_goal(
+            ee_goal_pos=final_place_pos,
+            ee_goal_quat=carry_quat,
+            label=f"carry received bottle to {final_place_path}",
+            tol=final_tol,
+        )
+        if not ok:
+            return False
+
+        self._detach_temp_received_bottle_in_place()
+
+        ok = await self._return_received_to_home()
+        if not ok:
+            return False
+
+        ok = await self._wait_and_delete_root(
+            TEMP_RECEIVED_BOTTLE_ROOT_PATH,
+            FINAL_DELETE_WAIT_SEC,
+            label=f"final {received_detected_type} bottle",
+        )
+        if not ok:
+            return False
+
+        return True
+
+    async def run(self):
+        try:
+            while not self.timeline.is_playing():
+                await asyncio.sleep(0.1)
+
+            ok = await self._wait_for_required_prims()
+            if not ok:
+                return
+
+            await self._ensure_runtime_ready()
+            _cleanup_stale_joints()
+            _cleanup_temp_objects()
+
+            cycle_index = 0
+
+            while self.timeline.is_playing():
+                cycle_index += 1
+                _important_print(f"[MASTER] Cycle start: {cycle_index}")
+
+                await asyncio.sleep(DELAY_BEFORE_MOVE_SEC)
+
+                if not self.timeline.is_playing():
+                    return
+
+                self.selected_bottle_type = None
+                self.selected_bottle_usd_path = None
+                self.last_giving_detected_type = None
+                self.last_received_detected_type = None
+                self.giving_follow_active = False
+                self.received_follow_active = False
+                self.mesh_move_active = False
+
+                if self.giving_return_task and not self.giving_return_task.done():
+                    self.giving_return_task.cancel()
+                self.giving_return_task = None
+
+                _cleanup_temp_objects()
+
+                ok = await self._move_giving_to_xform_keep_current_quat(
+                    WAYPOINT_000_PATH,
+                    label=f"move to {WAYPOINT_000_PATH}",
+                    tol=WAYPOINT_000_TOL,
+                )
+                if not ok:
+                    return
+
+                await self._close_giving_gripper_and_settle()
+                self._spawn_temp_giving_bottle_attached_to_tip()
+                await asyncio.sleep(HOLD_AFTER_ATTACH_SEC)
+
+                carry_quat = _get_world_pose(GIVING_EE_LINK_PATH)[1]
+                wp01_pos, _ = _get_world_pose(WAYPOINT_01_PATH)
+                ok = await self._move_giving_ee_goal(
+                    ee_goal_pos=wp01_pos,
+                    ee_goal_quat=carry_quat,
+                    label=f"carry temp bottle to {WAYPOINT_01_PATH}",
+                    tol=WAYPOINT_01_TOL,
+                )
+                if not ok:
+                    return
+
+                self.wp01_pick_quat = _get_world_pose(GIVING_EE_LINK_PATH)[1].copy()
+
+                self._detach_temp_giving_bottle_in_place()
+
+                ok = await self._move_giving_to_xform_keep_current_quat(
+                    WAYPOINT_001_PATH,
+                    label=f"move to {WAYPOINT_001_PATH} for clear camera view",
+                    tol=WAYPOINT_001_TOL,
+                )
+                if not ok:
+                    return
+
+                await asyncio.sleep(GIVING_QR_WAIT_AFTER_CLEAR_VIEW_SEC)
+
+                giving_detected_type = await self._detect_bottle_type_from_camera(
+                    GIVING_CAMERA_PATH,
+                    fallback_type=self.selected_bottle_type,
+                    log_label="giving_qr",
+                )
+                self.last_giving_detected_type = giving_detected_type
+
+                if giving_detected_type not in ["A", "B", "C"]:
+                    raise RuntimeError(f"Unexpected detected bottle type: {giving_detected_type}")
+
+                if giving_detected_type in ["A", "B"]:
+                    ok = await self._move_giving_to_wp01_with_saved_pick_quat(
+                        label=f"return to {WAYPOINT_01_PATH} for re-pick",
+                        tol=WAYPOINT_01_TOL,
+                    )
+                    if not ok:
+                        return
+
+                    await self._close_giving_gripper_and_settle()
+                    self._attach_existing_temp_giving_bottle_to_tip()
+
+                    carry_quat = _get_world_pose(GIVING_EE_LINK_PATH)[1]
+                    remove_pos, _ = _get_world_pose(GIVING_REMOVE_BOTTLE_XFORM_PATH)
+                    ok = await self._move_giving_ee_goal(
+                        ee_goal_pos=remove_pos,
+                        ee_goal_quat=carry_quat,
+                        label=f"carry detected {giving_detected_type} bottle to {GIVING_REMOVE_BOTTLE_XFORM_PATH}",
+                        tol=GIVING_REMOVE_POS_TOL,
+                    )
+                    if not ok:
+                        return
+
+                    self._delete_temp_giving_bottle()
+
+                    downstream_root = self._next_unique_root("/Root/output_bottle_ab")
+                    self._spawn_bottle_at_xform(
+                        downstream_root,
+                        GIVING_SPAWN_BOTTLE_XFORM_PATH,
+                        self.selected_bottle_usd_path,
+                    )
+
+                    if RETURN_GIVING_TO_WP000:
+                        if self.giving_return_task and not self.giving_return_task.done():
+                            self.giving_return_task.cancel()
+                        self.giving_return_task = asyncio.ensure_future(self._return_giving_to_wp000())
+
+                    ok = await self._move_mesh_until_stop(
+                        downstream_root,
+                        MOVE_DONE_XFORM_PATH,
+                    )
+                    if not ok:
+                        return
+
+                    if RETURN_GIVING_TO_WP000 and self.giving_return_task is not None:
+                        await self.giving_return_task
+
+                    ok = await self._process_ab_received_pipeline(
+                        downstream_root=downstream_root,
+                        giving_detected_type=giving_detected_type,
+                    )
+                    if not ok:
+                        return
+
+                else:
+                    ok = await self._move_giving_to_wp01_with_saved_pick_quat(
+                        label=f"return to {WAYPOINT_01_PATH} for re-pick C",
+                        tol=WAYPOINT_01_TOL,
+                    )
+                    if not ok:
+                        return
+
+                    await self._close_giving_gripper_and_settle()
+                    self._attach_existing_temp_giving_bottle_to_tip()
+
+                    carry_quat = _get_world_pose(GIVING_EE_LINK_PATH)[1]
+                    place_c_pos, _ = _get_world_pose(PLACE_FOR_C_PATH)
+                    ok = await self._move_giving_ee_goal(
+                        ee_goal_pos=place_c_pos,
+                        ee_goal_quat=carry_quat,
+                        label=f"carry detected C bottle to {PLACE_FOR_C_PATH}",
+                        tol=PLACE_FOR_C_TOL,
+                    )
+                    if not ok:
+                        return
+
+                    self._detach_temp_giving_bottle_in_place()
+
+                    ok = await self._process_c_final()
+                    if not ok:
+                        return
+
+                await asyncio.sleep(CYCLE_IDLE_SEC)
+
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
+        finally:
+            self.giving_follow_active = False
+            self.received_follow_active = False
+            self.mesh_move_active = False
+            self.task = None
+
+
+_shutdown_known_controllers()
+_cleanup_temp_objects()
+globals()[CURRENT_CONTROLLER_NAME] = PhaseMasterGivingReceivedV23()
+print("[MASTER] Ready")
